@@ -2,6 +2,7 @@
 #define __CMT_SPI3_H
 
 #include <stdint.h>
+#include <driver/spi_master.h>
 
 void cmt_spi3_init(int8_t pin_sdio, int8_t pin_clk, int8_t pin_cs, int8_t pin_fcs, uint32_t spi_speed);
 
