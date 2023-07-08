@@ -1,19 +1,30 @@
 #pragma once
 
+#include "spi_patcher.h"
+
 #include <RF24_hal.h>
 #include <driver/spi_master.h>
 
-class nrf_hal : public RF24_hal
+class nrf_hal : public RF24_hal, public spi_patcher_handle
 {
 public:
-    nrf_hal(int8_t pin_mosi, int8_t pin_miso, int8_t pin_clk, int8_t pin_cs, int8_t pin_en);
+    nrf_hal(gpio_num_t pin_mosi, gpio_num_t pin_miso, gpio_num_t pin_clk, gpio_num_t pin_cs, gpio_num_t pin_en);
 
-    void patch_spi(spi_host_device_t host_device);
-    void unpatch_spi(spi_host_device_t host_device);
-    void request_spi(void);
+    void patch(spi_host_device_t host_device) override;
+    void unpatch(spi_host_device_t host_device) override;
 
-    bool begin(void) override;
-    void end(void) override;
+    inline void request_spi()
+    {
+        spi_patcher_inst.request(this);
+    }
+
+    inline void release_spi()
+    {
+        spi_patcher_inst.release();
+    }
+
+    bool begin() override;
+    void end() override;
 
     void ce(bool level) override;
     uint8_t write(uint8_t cmd, const uint8_t* buf, uint8_t len) override;
@@ -22,12 +33,11 @@ public:
     uint8_t read(uint8_t cmd, uint8_t* buf, uint8_t data_len, uint8_t blank_len) override;
 
 private:
-    const int8_t pin_mosi;
-    const int8_t pin_miso;
-    const int8_t pin_clk;
-    const int8_t pin_cs;
-    const int8_t pin_en;
+    const gpio_num_t pin_mosi;
+    const gpio_num_t pin_miso;
+    const gpio_num_t pin_clk;
+    const gpio_num_t pin_cs;
+    const gpio_num_t pin_en;
     
     spi_device_handle_t spi;
-    Print* print;
 };

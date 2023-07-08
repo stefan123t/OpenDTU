@@ -1,21 +1,23 @@
 #include "nrf_hal.h"
 
-#include "spi_patcher.h"
-
 #define NRF_MAX_TRANSFER_SZ 64
 
-nrf_hal::nrf_hal(int8_t _pin_mosi, int8_t _pin_miso, int8_t _pin_clk, int8_t _pin_cs, int8_t _pin_en) :
-    pin_mosi(_pin_mosi),
-    pin_miso(_pin_miso),
-    pin_clk(_pin_clk),
-    pin_cs(_pin_cs),
-    pin_en(_pin_en)
+nrf_hal::nrf_hal(gpio_num_t pin_mosi, gpio_num_t pin_miso, gpio_num_t pin_clk, gpio_num_t pin_cs, gpio_num_t pin_en) :
+    pin_mosi(pin_mosi),
+    pin_miso(pin_miso),
+    pin_clk(pin_clk),
+    pin_cs(pin_cs),
+    pin_en(pin_en)
 {
 
 }
 
-void nrf_hal::patch_spi(spi_host_device_t host_device)
+void nrf_hal::patch(spi_host_device_t host_device)
 {
+    gpio_hold_en(pin_cs);
+
+    gpio_reset_pin(pin_cs);
+
     spi_bus_config_t buscfg = {
         .mosi_io_num = pin_mosi,
         .miso_io_num = pin_miso,
@@ -49,51 +51,56 @@ void nrf_hal::patch_spi(spi_host_device_t host_device)
         .post_cb = NULL
     };
     ESP_ERROR_CHECK(spi_bus_add_device(host_device, &devcfg, &spi));
+
+    gpio_hold_dis(pin_cs);
 }
 
-void nrf_hal::unpatch_spi(spi_host_device_t host_device)
+void nrf_hal::unpatch(spi_host_device_t host_device)
 {
-    spi_bus_remove_device(spi);
-    spi_bus_free(host_device);
+    gpio_hold_en(pin_cs);
 
-    pinMode(pin_cs, OUTPUT);
-    digitalWrite(pin_cs, HIGH);
+    ESP_ERROR_CHECK(spi_bus_remove_device(spi));
+    ESP_ERROR_CHECK(spi_bus_free(host_device));
+
+    gpio_reset_pin(pin_cs);
+    gpio_set_direction(pin_cs, GPIO_MODE_OUTPUT);
+    gpio_set_level(pin_cs, 1);
+
+    gpio_hold_dis(pin_cs);
 }
 
-void nrf_hal::request_spi(void)
+bool nrf_hal::begin()
 {
-    spi_patcher_inst.request(0, std::bind(&nrf_hal::patch_spi, this, std::placeholders::_1), std::bind(&nrf_hal::unpatch_spi, this, std::placeholders::_1));
-}
+    gpio_reset_pin(pin_cs);
+    gpio_set_direction(pin_cs, GPIO_MODE_OUTPUT);
+    gpio_set_level(pin_cs, 1);
 
-bool nrf_hal::begin(void)
-{
-    pinMode(pin_en, OUTPUT);
-    digitalWrite(pin_en, LOW);
-
-    delay(10);
+    gpio_reset_pin(pin_en);
+    gpio_set_direction(pin_en, GPIO_MODE_OUTPUT);
+    gpio_set_level(pin_en, 0);
 
     return true;
 }
 
-void nrf_hal::end(void)
+void nrf_hal::end()
 {
 
 }
 
 void nrf_hal::ce(bool level)
 {
-    digitalWrite(pin_en, level ? HIGH : LOW);
+    gpio_set_level(pin_en, level);
 }
 
 uint8_t nrf_hal::write(uint8_t cmd, const uint8_t* buf, uint8_t len)
 {
-    request_spi();
-
     uint8_t data[NRF_MAX_TRANSFER_SZ];
     data[0] = cmd;
-    for (uint8_t i = 0; i < len; ++i) {
-        data[(size_t)i + 1] = buf[i];
+    for (size_t i = 0; i < len; ++i) {
+        data[i + 1] = buf[i];
     }
+
+    request_spi();
 
     spi_transaction_t t = {
         .flags = 0,
@@ -107,23 +114,23 @@ uint8_t nrf_hal::write(uint8_t cmd, const uint8_t* buf, uint8_t len)
     };
     ESP_ERROR_CHECK(spi_device_polling_transmit(spi, &t));
 
-    //delayMicroseconds(100);
+    release_spi();
 
     return data[0]; // status
 }
 
 uint8_t nrf_hal::write(uint8_t cmd, const uint8_t* buf, uint8_t data_len, uint8_t blank_len)
 {
-    request_spi();
-
     uint8_t data[NRF_MAX_TRANSFER_SZ];
     data[0] = cmd;
-    for (uint8_t i = 0; i < data_len; ++i) {
-        data[(size_t)i + 1u] = buf[i];
+    for (size_t i = 0; i < data_len; ++i) {
+        data[i + 1u] = buf[i];
     }
-    for (uint8_t i = 0; i < blank_len; ++i) {
-        data[(size_t)i + data_len + 1u] = 0;
+    for (size_t i = 0; i < blank_len; ++i) {
+        data[i + data_len + 1u] = 0;
     }
+
+    request_spi();
 
     spi_transaction_t t = {
         .flags = 0,
@@ -137,20 +144,20 @@ uint8_t nrf_hal::write(uint8_t cmd, const uint8_t* buf, uint8_t data_len, uint8_
     };
     ESP_ERROR_CHECK(spi_device_polling_transmit(spi, &t));
 
-    //delayMicroseconds(100);
-    
+    release_spi();
+
     return data[0]; // status
 }
 
 uint8_t nrf_hal::read(uint8_t cmd, uint8_t* buf, uint8_t len)
 {
-    request_spi();
-
     uint8_t data[NRF_MAX_TRANSFER_SZ];
     data[0] = cmd;
-    for (uint8_t i = 0; i < len; ++i) {
-        data[(size_t)i + 1u] = 0xff;
+    for (size_t i = 0; i < len; ++i) {
+        data[i + 1u] = 0xff;
     }
+
+    request_spi();
 
     spi_transaction_t t = {
         .flags = 0,
@@ -164,26 +171,26 @@ uint8_t nrf_hal::read(uint8_t cmd, uint8_t* buf, uint8_t len)
     };
     ESP_ERROR_CHECK(spi_device_polling_transmit(spi, &t));
 
-    //delayMicroseconds(100);
+    release_spi();
 
-    for (uint8_t i = 0; i < len; ++i) {
-        buf[i] = data[(size_t)i + 1u];
+    for (size_t i = 0; i < len; ++i) {
+        buf[i] = data[i + 1u];
     }
     return data[0]; // status
 }
 
 uint8_t nrf_hal::read(uint8_t cmd, uint8_t* buf, uint8_t data_len, uint8_t blank_len)
 {
-    request_spi();
-
     uint8_t data[NRF_MAX_TRANSFER_SZ];
     data[0] = cmd;
-    for (uint8_t i = 0; i < data_len; ++i) {
-        data[(size_t)i + 1u] = 0xff;
+    for (size_t i = 0; i < data_len; ++i) {
+        data[i + 1u] = 0xff;
     }
-    for (uint8_t i = 0; i < blank_len; ++i) {
-        data[(size_t)i + data_len + 1u] = 0xff;
+    for (size_t i = 0; i < blank_len; ++i) {
+        data[i + data_len + 1u] = 0xff;
     }
+
+    request_spi();
 
     spi_transaction_t t = {
         .flags = 0,
@@ -197,10 +204,10 @@ uint8_t nrf_hal::read(uint8_t cmd, uint8_t* buf, uint8_t data_len, uint8_t blank
     };
     ESP_ERROR_CHECK(spi_device_polling_transmit(spi, &t));
 
-    //delayMicroseconds(100);
+    release_spi();
 
-    for (uint8_t i = 0; i < data_len; ++i) {
-        buf[i] = data[(size_t)i + 1u];
+    for (size_t i = 0; i < data_len; ++i) {
+        buf[i] = data[i + 1u];
     }
     return data[0]; // status
 }

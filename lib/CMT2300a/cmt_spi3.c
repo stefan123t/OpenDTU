@@ -1,19 +1,13 @@
 #include "cmt_spi3.h"
+#include "cmt_spi_patcher_handle.h"
 #include <Arduino.h>
-#include <spi_patcher.h>
-
-SemaphoreHandle_t paramLock = NULL;
-#define SPI_PARAM_LOCK() \
-    do {                 \
-    } while (xSemaphoreTake(paramLock, portMAX_DELAY) != pdPASS)
-#define SPI_PARAM_UNLOCK() xSemaphoreGive(paramLock)
 
 spi_device_handle_t spi_reg, spi_fifo;
 
 int8_t m_pin_sdio, m_pin_clk, m_pin_cs, m_pin_fcs;
 uint32_t m_spi_speed;
 
-void patch_spi(spi_host_device_t host_device)
+void cmt_patch_spi(spi_host_device_t host_device)
 {
     spi_bus_config_t buscfg = {
         .mosi_io_num = m_pin_sdio,
@@ -61,35 +55,24 @@ void patch_spi(spi_host_device_t host_device)
     ESP_ERROR_CHECK(spi_bus_add_device(host_device, &devcfg2, &spi_fifo));
 }
 
-void unpatch_spi(spi_host_device_t host_device)
+void cmt_unpatch_spi(spi_host_device_t host_device)
 {
     spi_bus_remove_device(spi_reg);
     spi_bus_remove_device(spi_fifo);
     spi_bus_free(host_device);
 }
 
-void request_spi(void)
-{
-    spi_patcher_inst_request(1, patch_spi, unpatch_spi);
-}
-
 void cmt_spi3_init(int8_t pin_sdio, int8_t pin_clk, int8_t pin_cs, int8_t pin_fcs, uint32_t spi_speed)
 {
-    paramLock = xSemaphoreCreateMutex();
-
     m_pin_sdio = pin_sdio;
     m_pin_clk = pin_clk;
     m_pin_cs = pin_cs;
     m_pin_fcs = pin_fcs;
     m_spi_speed = spi_speed;
-
-    //delay(10);
 }
 
 void cmt_spi3_write(uint8_t addr, uint8_t data)
 {
-    request_spi();
-
     spi_transaction_t t = {
         .cmd = 0,
         .addr = addr,
@@ -97,16 +80,14 @@ void cmt_spi3_write(uint8_t addr, uint8_t data)
         .tx_buffer = &data,
         .rx_buffer = NULL
     };
-    SPI_PARAM_LOCK();
+    cmt_request_spi();
     ESP_ERROR_CHECK(spi_device_polling_transmit(spi_reg, &t));
-    SPI_PARAM_UNLOCK();
+    cmt_release_spi();
     delayMicroseconds(100);
 }
 
 uint8_t cmt_spi3_read(uint8_t addr)
 {
-    request_spi();
-
     uint8_t rx_data;
     spi_transaction_t t = {
         .cmd = 1,
@@ -115,45 +96,41 @@ uint8_t cmt_spi3_read(uint8_t addr)
         .tx_buffer = NULL,
         .rx_buffer = &rx_data
     };
-    SPI_PARAM_LOCK();
+    cmt_request_spi();
     ESP_ERROR_CHECK(spi_device_polling_transmit(spi_reg, &t));
-    SPI_PARAM_UNLOCK();
+    cmt_release_spi();
     delayMicroseconds(100);
     return rx_data;
 }
 
 void cmt_spi3_write_fifo(const uint8_t* buf, uint16_t len)
 {
-    request_spi();
-
     spi_transaction_t t = {
         .length = 8,
         .rx_buffer = NULL
     };
 
-    SPI_PARAM_LOCK();
+    cmt_request_spi();
     for (uint8_t i = 0; i < len; i++) {
         t.tx_buffer = buf + i;
         ESP_ERROR_CHECK(spi_device_polling_transmit(spi_fifo, &t));
         delayMicroseconds(4); // > 4 us
     }
-    SPI_PARAM_UNLOCK();
+    cmt_release_spi();
 }
 
 void cmt_spi3_read_fifo(uint8_t* buf, uint16_t len)
 {
-    request_spi();
-
     spi_transaction_t t = {
         .rxlength = 8,
         .tx_buffer = NULL
     };
 
-    SPI_PARAM_LOCK();
+    cmt_request_spi();
     for (uint8_t i = 0; i < len; i++) {
         t.rx_buffer = buf + i;
         ESP_ERROR_CHECK(spi_device_polling_transmit(spi_fifo, &t));
         delayMicroseconds(4); // > 4 us
     }
-    SPI_PARAM_UNLOCK();
+    cmt_release_spi();
 }
