@@ -23,6 +23,8 @@
 #include <Arduino.h>
 #include <LittleFS.h>
 
+#include <driver/uart.h>
+
 void setup()
 {
     // Initialize serial output
