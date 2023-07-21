@@ -75,6 +75,8 @@ private:
     network_mode _networkMode = network_mode::Undefined;
     bool _ethConnected = false;
     std::vector<NetworkEventCbList_t> _cbEventList;
+
+    void setupSpiEth();
 };
 
 extern NetworkSettingsClass NetworkSettings;

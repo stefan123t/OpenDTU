@@ -10,6 +10,8 @@
 #include "defaults.h"
 #include <ETH.h>
 
+#include <driver/spi_master.h>
+
 NetworkSettingsClass::NetworkSettingsClass()
     : apIp(192, 168, 4, 1)
     , apNetmask(255, 255, 255, 0)
@@ -83,6 +85,92 @@ void NetworkSettingsClass::NetworkEvent(WiFiEvent_t event)
     }
 }
 
+extern void tcpipInit();
+extern void add_esp_interface_netif(esp_interface_t interface, esp_netif_t* esp_netif); /* from WiFiGeneric */
+
+void NetworkSettingsClass::setupSpiEth()
+{
+    tcpipInit();
+
+    ESP_ERROR_CHECK(tcpip_adapter_set_default_eth_handlers());
+
+    //ESP_ERROR_CHECK(gpio_install_isr_service(0)); // TODO: Kompatibel? -> offensichtlich nicht ahhhhhhhhhhhhhhhhhhh
+    attachInterrupt(digitalPinToInterrupt(44), nullptr, DEFAULT);
+    detachInterrupt(digitalPinToInterrupt(44));
+    gpio_reset_pin(static_cast<gpio_num_t>(44));
+
+    spi_bus_config_t buscfg = {
+        .mosi_io_num = 40,
+        .miso_io_num = 41,
+        .sclk_io_num = 39,
+        .quadwp_io_num = -1,
+        .quadhd_io_num = -1,
+        .data4_io_num = -1,
+        .data5_io_num = -1,
+        .data6_io_num = -1,
+        .data7_io_num = -1,
+        .max_transfer_sz = 0, // uses default value internally
+        .flags = 0,
+        .intr_flags = 0
+    };
+    spi_bus_free(SPI3_HOST); // TODO: WARUM D:
+    ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO)); // TODO: DMA_CH
+
+    spi_device_handle_t spi;
+
+    spi_device_interface_config_t devcfg = {
+        .command_bits = 16, // actually address phase
+        .address_bits = 8, // actually command phase
+        .dummy_bits = 0,
+        .mode = 0,
+        .duty_cycle_pos = 0,
+        .cs_ena_pretrans = 1,
+        .cs_ena_posttrans = 1,
+        .clock_speed_hz = 1000000, // TODO
+        .input_delay_ns = 0,
+        .spics_io_num = 42,
+        .flags = 0,
+        .queue_size = 20, // TODO
+        .pre_cb = NULL,
+        .post_cb = NULL
+    };
+    ESP_ERROR_CHECK(spi_bus_add_device(SPI3_HOST, &devcfg, &spi));
+
+    eth_w5500_config_t w5500_config = ETH_W5500_DEFAULT_CONFIG(spi);
+    w5500_config.int_gpio_num = 44;
+
+    eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();
+    esp_eth_mac_t *mac = esp_eth_mac_new_w5500(&w5500_config, &mac_config);
+
+    eth_phy_config_t phy_config = ETH_PHY_DEFAULT_CONFIG();
+    //phy_config.phy_addr = ; ???
+    phy_config.reset_gpio_num = 43;
+    esp_eth_phy_t *phy = esp_eth_phy_new_w5500(&phy_config);
+
+    // ######
+
+    esp_eth_config_t eth_config = ETH_DEFAULT_CONFIG(mac, phy);
+    esp_eth_handle_t eth_handle = NULL;
+    ESP_ERROR_CHECK(esp_eth_driver_install(&eth_config, &eth_handle));
+
+    uint8_t mac_addr[6] = {
+        0x02, 0x00, 0x00, 0x12, 0x34, 0x56
+    };
+    ESP_ERROR_CHECK(esp_eth_ioctl(eth_handle, ETH_CMD_S_MAC_ADDR, mac_addr));
+
+    esp_netif_config_t netif_config = ESP_NETIF_DEFAULT_ETH();
+    esp_netif_t *eth_netif = esp_netif_new(&netif_config);
+
+    ESP_ERROR_CHECK(esp_netif_attach(eth_netif, esp_eth_new_netif_glue(eth_handle)));
+
+    /* attach to WiFiGeneric to receive events */
+    add_esp_interface_netif(ESP_IF_ETH, eth_netif);
+
+    ESP_ERROR_CHECK(esp_eth_start(eth_handle));
+
+    delay(100);
+}
+
 bool NetworkSettingsClass::onEvent(NetworkEventCb cbEvent, network_event event)
 {
     if (!cbEvent) {
@@ -129,10 +217,11 @@ void NetworkSettingsClass::setupMode()
         }
     }
 
-    if (PinMapping.isValidEthConfig()) {
+    /*if (PinMapping.isValidEthConfig()) {
         PinMapping_t& pin = PinMapping.get();
         ETH.begin(pin.eth_phy_addr, pin.eth_power, pin.eth_mdc, pin.eth_mdio, pin.eth_type, pin.eth_clk_mode);
-    }
+    }*/
+    setupSpiEth();
 }
 
 void NetworkSettingsClass::enableAdminMode()
