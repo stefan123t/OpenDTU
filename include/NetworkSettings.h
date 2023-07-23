@@ -8,7 +8,6 @@
 enum class network_mode {
     WiFi,
     Ethernet,
-    EthernetSpi,
     Undefined
 };
 
@@ -76,8 +75,7 @@ private:
     network_mode _networkMode = network_mode::Undefined;
     bool _ethConnected = false;
     std::vector<NetworkEventCbList_t> _cbEventList;
-
-    void setupSpiEth();
+    bool _spiEth = false;
 };
 
 extern NetworkSettingsClass NetworkSettings;

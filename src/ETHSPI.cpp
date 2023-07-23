@@ -6,6 +6,7 @@
 #include <driver/gpio.h>
 #include <driver/spi_master.h>
 #include <Arduino.h>
+#include "MessageOutput.h"
 
 extern void tcpipInit();
 extern void add_esp_interface_netif(esp_interface_t interface, esp_netif_t* esp_netif); /* from WiFiGeneric */
@@ -16,30 +17,29 @@ ETHSPIClass::ETHSPIClass() :
 
 }
 
-void ETHSPIClass::begin()
+void ETHSPIClass::begin(int8_t pin_sclk, int8_t pin_mosi, int8_t pin_miso, int8_t pin_cs, int8_t pin_int, int8_t pin_rst)
 {
+    delay(1000);
+
     uint8_t base_mac[6];
     esp_base_mac_addr_get(base_mac);
     base_mac[5] |= 0x03;
     //MessageOutput.printf("%02x:%02x:%02x:%02x:%02x:%02x\n", base_mac[0], base_mac[1], base_mac[2], base_mac[3], base_mac[4], base_mac[5]);
 
-    gpio_reset_pin(static_cast<gpio_num_t>(12));
-    gpio_set_direction(static_cast<gpio_num_t>(12), GPIO_MODE_OUTPUT);
-    gpio_set_level(static_cast<gpio_num_t>(12), 0);
+    //gpio_reset_pin(static_cast<gpio_num_t>(12));
+    //gpio_set_direction(static_cast<gpio_num_t>(12), GPIO_MODE_OUTPUT);
+    //gpio_set_level(static_cast<gpio_num_t>(12), 0);
 
-    gpio_set_direction(static_cast<gpio_num_t>(43), GPIO_MODE_OUTPUT);
-    gpio_set_level(static_cast<gpio_num_t>(43), 0);
-    vTaskDelay(500 / portTICK_PERIOD_MS);
-    gpio_set_level(static_cast<gpio_num_t>(43), 1);
-    vTaskDelay(500 / portTICK_PERIOD_MS);
+    gpio_set_direction(static_cast<gpio_num_t>(pin_rst), GPIO_MODE_OUTPUT);
+    gpio_set_level(static_cast<gpio_num_t>(pin_rst), 0);
 
-    gpio_reset_pin(static_cast<gpio_num_t>(39));
+    //gpio_reset_pin(static_cast<gpio_num_t>(39));
     //gpio_set_drive_capability(static_cast<gpio_num_t>(39), GPIO_DRIVE_CAP_3);
-    gpio_reset_pin(static_cast<gpio_num_t>(40));
+    //gpio_reset_pin(static_cast<gpio_num_t>(40));
     //gpio_set_drive_capability(static_cast<gpio_num_t>(40), GPIO_DRIVE_CAP_3);
-    gpio_reset_pin(static_cast<gpio_num_t>(42));
+    //gpio_reset_pin(static_cast<gpio_num_t>(42));
     //gpio_set_drive_capability(static_cast<gpio_num_t>(42), GPIO_DRIVE_CAP_3);
-    gpio_reset_pin(static_cast<gpio_num_t>(41));
+    //gpio_reset_pin(static_cast<gpio_num_t>(41));
     
     //MessageOutput.println("################## 2 #################");
 
@@ -59,9 +59,9 @@ void ETHSPIClass::begin()
     //MessageOutput.println("################## 5 #################");
 
     spi_bus_config_t buscfg = {
-        .mosi_io_num = 40,
-        .miso_io_num = 41,
-        .sclk_io_num = 39,
+        .mosi_io_num = pin_mosi,
+        .miso_io_num = pin_miso,
+        .sclk_io_num = pin_sclk,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
         .data4_io_num = -1,
@@ -86,7 +86,7 @@ void ETHSPIClass::begin()
         .cs_ena_posttrans = 0, // UNBEDINGT 0 LASSEN
         .clock_speed_hz = 5000000, // TODO
         .input_delay_ns = 0,
-        .spics_io_num = 42,
+        .spics_io_num = pin_cs,
         .flags = 0,
         .queue_size = 20, // TODO
         .pre_cb = NULL,
@@ -94,8 +94,12 @@ void ETHSPIClass::begin()
     };
     ESP_ERROR_CHECK(spi_bus_add_device(SPI3_HOST, &devcfg, &spi));
 
+    delayMicroseconds(500);
+    gpio_set_level(static_cast<gpio_num_t>(pin_rst), 1);
+    delayMicroseconds(1000);
+
     eth_w5500_config_t w5500_config = ETH_W5500_DEFAULT_CONFIG(spi);
-    w5500_config.int_gpio_num = 44;
+    w5500_config.int_gpio_num = pin_int;
 
     eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();
     mac_config.rx_task_stack_size = 8192; // ?
@@ -108,12 +112,15 @@ void ETHSPIClass::begin()
 
     // ######
 
+    MessageOutput.println("######### 1 #########");
     esp_eth_config_t eth_config = ETH_DEFAULT_CONFIG(mac, phy);
     if (esp_eth_driver_install(&eth_config, &eth_handle) != ESP_OK) {
         ESP_ERROR_CHECK(mac->del(mac)); // ?
         ESP_ERROR_CHECK(phy->del(phy)); // ?
+        MessageOutput.println("######### 2 #########");
         return;
     }
+    MessageOutput.println("######### 3 #########");
 
     ESP_ERROR_CHECK(esp_eth_ioctl(eth_handle, ETH_CMD_S_MAC_ADDR, base_mac));
 
@@ -133,7 +140,7 @@ void ETHSPIClass::begin()
 
     esp_err_t err = esp_eth_start(eth_handle);
 
-    gpio_set_level(static_cast<gpio_num_t>(12), 1);
+    //gpio_set_level(static_cast<gpio_num_t>(12), 1);
 
     //MessageOutput.println("################## 14 #################");
 

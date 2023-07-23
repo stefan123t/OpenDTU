@@ -88,16 +88,6 @@ void NetworkSettingsClass::NetworkEvent(WiFiEvent_t event)
 #include "driver/uart.h"
 #include "ETHSPI.h"
 
-void NetworkSettingsClass::setupSpiEth()
-{
-    //periph_module_disable(PERIPH_UART0_MODULE);
-    ESP_ERROR_CHECK(uart_driver_delete(UART_NUM_0));
-    gpio_reset_pin(static_cast<gpio_num_t>(43));
-    gpio_reset_pin(static_cast<gpio_num_t>(44));
-
-    ETHSPI.begin();
-}
-
 bool NetworkSettingsClass::onEvent(NetworkEventCb cbEvent, network_event event)
 {
     if (!cbEvent) {
@@ -144,14 +134,16 @@ void NetworkSettingsClass::setupMode()
         }
     }
 
-    if (PinMapping.isValidEthConfig()) {
+    if (PinMapping.isValidW5500Config()) {
+        if (!_spiEth) {
+            _spiEth = true;
+
+            PinMapping_t& pin = PinMapping.get();
+            ETHSPI.begin(pin.w5500_sclk, pin.w5500_mosi, pin.w5500_miso, pin.w5500_cs, pin.w5500_int, pin.w5500_rst);
+        }
+    } else if (PinMapping.isValidEthConfig()) {
         PinMapping_t& pin = PinMapping.get();
         ETH.begin(pin.eth_phy_addr, pin.eth_power, pin.eth_mdc, pin.eth_mdio, pin.eth_type, pin.eth_clk_mode);
-    }
-    static bool eth_setup = false;
-    if (!eth_setup) {
-        eth_setup = true;
-        setupSpiEth();
     }
 }
 
@@ -374,6 +366,8 @@ String NetworkSettingsClass::macAddress()
 {
     switch (_networkMode) {
     case network_mode::Ethernet:
+        if (_spiEth)
+            return ETHSPI.macAddress();
         return ETH.macAddress();
         break;
     case network_mode::WiFi:
