@@ -8,6 +8,7 @@
 enum class network_mode {
     WiFi,
     Ethernet,
+    EthernetSpi,
     Undefined
 };
 
