@@ -27,13 +27,6 @@
 
 void setup()
 {
-#ifdef OPENDTU_DISABLE_UART0
-    /*ESP_ERROR_CHECK(uart_driver_delete(UART_NUM_0));
-    gpio_reset_pin(static_cast<gpio_num_t>(43));
-    gpio_reset_pin(static_cast<gpio_num_t>(44));*/
-    Serial0.end(true); // Allow UART0 pins to be freely used
-#endif
-
     // Initialize serial output
     Serial.begin(SERIAL_BAUDRATE);
 #if ARDUINO_USB_CDC_ON_BOOT
