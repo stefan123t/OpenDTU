@@ -42,7 +42,7 @@ void nrf_hal::init(gpio_num_t _pin_mosi, gpio_num_t _pin_miso, gpio_num_t _pin_c
         spi_speed = _spi_speed;
     }
 
-    host_device = spi_patcher_inst.init();
+    host_device = HoymilesSpiPatcher.init();
 
     gpio_reset_pin(pin_mosi);
     gpio_set_direction(pin_mosi, GPIO_MODE_OUTPUT);

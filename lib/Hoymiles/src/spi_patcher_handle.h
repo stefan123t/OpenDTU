@@ -1,12 +1,10 @@
 #pragma once
 
-#include <driver/spi_master.h>
-
-class spi_patcher_handle
+class SpiPatcherHandle
 {
 public:
-    spi_patcher_handle();
-    virtual ~spi_patcher_handle();
+    SpiPatcherHandle();
+    virtual ~SpiPatcherHandle();
 
     virtual void patch() = 0;
     virtual void unpatch() = 0;

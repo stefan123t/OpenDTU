@@ -4,7 +4,7 @@
 
 #include <RF24_hal.h>
 
-class nrf_hal : public RF24_hal, public spi_patcher_handle
+class nrf_hal : public RF24_hal, public SpiPatcherHandle
 {
 public:
     nrf_hal();
@@ -26,12 +26,12 @@ public:
 private:
     inline void request_spi()
     {
-        spi_patcher_inst.request(this);
+        HoymilesSpiPatcher.request(this);
     }
 
     inline void release_spi()
     {
-        spi_patcher_inst.release();
+        HoymilesSpiPatcher.release();
     }
 
     gpio_num_t pin_mosi;

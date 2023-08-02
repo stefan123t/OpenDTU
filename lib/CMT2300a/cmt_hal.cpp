@@ -40,7 +40,7 @@ void cmt_hal::init(gpio_num_t _pin_sdio, gpio_num_t _pin_clk, gpio_num_t _pin_cs
         spi_speed = _spi_speed;
     }
 
-    host_device = spi_patcher_inst.init();
+    host_device = HoymilesSpiPatcher.init();
 
     gpio_reset_pin(pin_sdio);
     gpio_set_direction(pin_sdio, GPIO_MODE_INPUT_OUTPUT);

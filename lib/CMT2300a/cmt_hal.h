@@ -4,7 +4,7 @@
 
 #include <driver/gpio.h>
 
-class cmt_hal : public spi_patcher_handle
+class cmt_hal : public SpiPatcherHandle
 {
 public:
     cmt_hal();
@@ -22,12 +22,12 @@ public:
 private:
     inline void request_spi()
     {
-        spi_patcher_inst.request(this);
+        HoymilesSpiPatcher.request(this);
     }
 
     inline void release_spi()
     {
-        spi_patcher_inst.release();
+        HoymilesSpiPatcher.release();
     }
 
     gpio_num_t pin_sdio;
