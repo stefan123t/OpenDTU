@@ -7,10 +7,12 @@
 class nrf_hal : public RF24_hal, public spi_patcher_handle
 {
 public:
-    nrf_hal(gpio_num_t pin_mosi, gpio_num_t pin_miso, gpio_num_t pin_clk, gpio_num_t pin_cs, gpio_num_t pin_en);
+    nrf_hal();
 
     void patch() override;
     void unpatch() override;
+
+    void init(gpio_num_t pin_mosi, gpio_num_t pin_miso, gpio_num_t pin_clk, gpio_num_t pin_cs, gpio_num_t pin_en, int32_t spi_speed = 0);
 
     bool begin() override;
     void end() override;
@@ -32,11 +34,12 @@ private:
         spi_patcher_inst.release();
     }
 
-    const gpio_num_t pin_mosi;
-    const gpio_num_t pin_miso;
-    const gpio_num_t pin_clk;
-    const gpio_num_t pin_cs;
-    const gpio_num_t pin_en;
+    gpio_num_t pin_mosi;
+    gpio_num_t pin_miso;
+    gpio_num_t pin_clk;
+    gpio_num_t pin_cs;
+    gpio_num_t pin_en;
+    int32_t spi_speed;
 
     spi_host_device_t host_device;
     spi_device_handle_t spi;

@@ -12,7 +12,7 @@ public:
     void patch() override;
     void unpatch() override;
 
-    void init(gpio_num_t pin_sdio, gpio_num_t pin_clk, gpio_num_t pin_cs, gpio_num_t pin_fcs, int32_t spi_speed);
+    void init(gpio_num_t pin_sdio, gpio_num_t pin_clk, gpio_num_t pin_cs, gpio_num_t pin_fcs, int32_t spi_speed = 0);
 
     uint8_t read_reg(uint8_t addr);
     void write_reg(uint8_t addr, uint8_t data);
