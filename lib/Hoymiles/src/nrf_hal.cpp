@@ -1,84 +1,86 @@
 #include "nrf_hal.h"
 
+#include <esp_rom_gpio.h>
+
 #define NRF_MAX_TRANSFER_SZ 64
+#define NRF_DEFAULT_SPI_SPEED 10000000 // 10 MHz
 
-nrf_hal::nrf_hal(gpio_num_t pin_mosi, gpio_num_t pin_miso, gpio_num_t pin_clk, gpio_num_t pin_cs, gpio_num_t pin_en) :
-    pin_mosi(pin_mosi),
-    pin_miso(pin_miso),
-    pin_clk(pin_clk),
-    pin_cs(pin_cs),
-    pin_en(pin_en)
+nrf_hal::nrf_hal() :
+    pin_mosi(GPIO_NUM_NC),
+    pin_miso(GPIO_NUM_NC),
+    pin_clk(GPIO_NUM_NC),
+    pin_cs(GPIO_NUM_NC),
+    pin_en(GPIO_NUM_NC),
+    spi_speed(NRF_DEFAULT_SPI_SPEED)
 {
-
+    
 }
 
-void nrf_hal::patch(spi_host_device_t host_device)
+void nrf_hal::patch()
 {
-    gpio_hold_en(pin_cs);
+    esp_rom_gpio_connect_out_signal(pin_mosi, spi_periph_signal[host_device].spid_out, false, false);
+    esp_rom_gpio_connect_in_signal(pin_miso, spi_periph_signal[host_device].spiq_in, false);
+    esp_rom_gpio_connect_out_signal(pin_clk, spi_periph_signal[host_device].spiclk_out, false, false);
+}
+
+void nrf_hal::unpatch()
+{
+    esp_rom_gpio_connect_out_signal(pin_mosi, SIG_GPIO_OUT_IDX, false, false);
+    esp_rom_gpio_connect_in_signal(pin_miso, GPIO_MATRIX_CONST_ZERO_INPUT, false);
+    esp_rom_gpio_connect_out_signal(pin_clk, SIG_GPIO_OUT_IDX, false, false);
+}
+
+void nrf_hal::init(gpio_num_t _pin_mosi, gpio_num_t _pin_miso, gpio_num_t _pin_clk, gpio_num_t _pin_cs, gpio_num_t _pin_en, int32_t _spi_speed)
+{
+    pin_mosi = _pin_mosi;
+    pin_miso = _pin_miso;
+    pin_clk = _pin_clk;
+    pin_cs = _pin_cs;
+    pin_en = _pin_en;
+
+    if (_spi_speed > 0) {
+        spi_speed = _spi_speed;
+    }
+
+    host_device = HoymilesSpiPatcher.init();
+
+    gpio_reset_pin(pin_mosi);
+    gpio_set_direction(pin_mosi, GPIO_MODE_OUTPUT);
+    gpio_set_level(pin_mosi, 1);
+
+    gpio_reset_pin(pin_miso);
+    gpio_set_direction(pin_miso, GPIO_MODE_INPUT);
+
+    gpio_reset_pin(pin_clk);
+    gpio_set_direction(pin_clk, GPIO_MODE_OUTPUT);
+    gpio_set_level(pin_clk, 0);
 
     gpio_reset_pin(pin_cs);
-
-    spi_bus_config_t buscfg = {
-        .mosi_io_num = pin_mosi,
-        .miso_io_num = pin_miso,
-        .sclk_io_num = pin_clk,
-        .quadwp_io_num = -1,
-        .quadhd_io_num = -1,
-        .data4_io_num = -1,
-        .data5_io_num = -1,
-        .data6_io_num = -1,
-        .data7_io_num = -1,
-        .max_transfer_sz = NRF_MAX_TRANSFER_SZ,
-        .flags = 0,
-        .intr_flags = 0
-    };
-    ESP_ERROR_CHECK(spi_bus_initialize(host_device, &buscfg, SPI_DMA_DISABLED));
-
     spi_device_interface_config_t devcfg = {
         .command_bits = 0,
         .address_bits = 0,
         .dummy_bits = 0,
         .mode = 0,
         .duty_cycle_pos = 0,
-        .cs_ena_pretrans = 1,
-        .cs_ena_posttrans = 1,
-        .clock_speed_hz = 10000000,
+        .cs_ena_pretrans = 0,
+        .cs_ena_posttrans = 0,
+        .clock_speed_hz = spi_speed,
         .input_delay_ns = 0,
         .spics_io_num = pin_cs,
         .flags = 0,
         .queue_size = 1,
-        .pre_cb = NULL,
-        .post_cb = NULL
+        .pre_cb = nullptr,
+        .post_cb = nullptr
     };
     ESP_ERROR_CHECK(spi_bus_add_device(host_device, &devcfg, &spi));
-
-    gpio_hold_dis(pin_cs);
-}
-
-void nrf_hal::unpatch(spi_host_device_t host_device)
-{
-    gpio_hold_en(pin_cs);
-
-    ESP_ERROR_CHECK(spi_bus_remove_device(spi));
-    ESP_ERROR_CHECK(spi_bus_free(host_device));
-
-    gpio_reset_pin(pin_cs);
-    gpio_set_direction(pin_cs, GPIO_MODE_OUTPUT);
-    gpio_set_level(pin_cs, 1);
-
-    gpio_hold_dis(pin_cs);
-}
-
-bool nrf_hal::begin()
-{
-    gpio_reset_pin(pin_cs);
-    gpio_set_direction(pin_cs, GPIO_MODE_OUTPUT);
-    gpio_set_level(pin_cs, 1);
 
     gpio_reset_pin(pin_en);
     gpio_set_direction(pin_en, GPIO_MODE_OUTPUT);
     gpio_set_level(pin_en, 0);
+}
 
+bool nrf_hal::begin()
+{
     return true;
 }
 

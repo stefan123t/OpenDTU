@@ -1,26 +1,29 @@
 #pragma once
 
-#include "spi_patcher_handle.h"
+#include "SpiPatcherHandle.h"
 
+#include <driver/spi_master.h>
 #include <freertos/semphr.h>
 
-class spi_patcher
+class SpiPatcher
 {
 public:
-    spi_patcher(spi_host_device_t host_device);
-    ~spi_patcher();
+    explicit SpiPatcher(spi_host_device_t host_device);
+    ~SpiPatcher();
 
-    inline void request(spi_patcher_handle* handle)
+    spi_host_device_t init();
+
+    inline void request(SpiPatcherHandle* handle)
     {
         xSemaphoreTake(mutex, portMAX_DELAY);
 
         if (cur_handle != handle) {
             if (cur_handle) {
-                cur_handle->unpatch(host_device);
+                cur_handle->unpatch();
             }
             cur_handle = handle;
             if (cur_handle) {
-                cur_handle->patch(host_device);
+                cur_handle->patch();
             }
         }
     }
@@ -32,10 +35,12 @@ public:
 
 private:
     const spi_host_device_t host_device;
-    spi_patcher_handle* cur_handle;
+    bool initialized;
+
+    SpiPatcherHandle* cur_handle;
 
     SemaphoreHandle_t mutex;
     StaticSemaphore_t mutex_buffer;
 };
 
-extern spi_patcher spi_patcher_inst;
+extern SpiPatcher HoymilesSpiPatcher;
