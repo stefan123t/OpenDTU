@@ -1,6 +1,6 @@
 #pragma once
 
-#include "spi_patcher.h"
+#include "SpiPatcher.h"
 
 #include <RF24_hal.h>
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "spi_patcher_handle.h"
+#include "SpiPatcherHandle.h"
 
 #include <driver/spi_master.h>
 #include <freertos/semphr.h>

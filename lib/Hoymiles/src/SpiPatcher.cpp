@@ -1,4 +1,4 @@
-#include "spi_patcher.h"
+#include "SpiPatcher.h"
 
 #define HOYMILES_HOST_DEVICE SPI2_HOST
 
