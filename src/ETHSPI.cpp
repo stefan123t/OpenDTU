@@ -1,24 +1,14 @@
 #include "ETHSPI.h"
 
-#include <esp_eth.h>
-#include <esp_system.h>
-#include <FreeRTOS.h>
-#include <driver/gpio.h>
 #include <driver/spi_master.h>
-#include <Arduino.h>
-#include "MessageOutput.h"
 
-extern void tcpipInit();
-extern void add_esp_interface_netif(esp_interface_t interface, esp_netif_t* esp_netif); /* from WiFiGeneric */
+// Functions from WiFiGeneric
+void tcpipInit();
+void add_esp_interface_netif(esp_interface_t interface, esp_netif_t* esp_netif);
 
 ETHSPIClass::ETHSPIClass() :
     eth_handle(nullptr),
     eth_netif(nullptr)
-{
-
-}
-
-static void interrupt_stub()
 {
 
 }
@@ -36,7 +26,7 @@ void ETHSPIClass::begin(int8_t pin_sclk, int8_t pin_mosi, int8_t pin_miso, int8_
     gpio_set_pull_mode(static_cast<gpio_num_t>(pin_miso), GPIO_PULLUP_ONLY);
 
     // Workaround, because calling gpio_install_isr_service directly causes issues with attachInterrupt later
-    attachInterrupt(digitalPinToInterrupt(pin_int), interrupt_stub, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(pin_int), nullptr, CHANGE);
     detachInterrupt(digitalPinToInterrupt(pin_int));
     gpio_reset_pin(static_cast<gpio_num_t>(pin_int));
     gpio_set_pull_mode(static_cast<gpio_num_t>(pin_int), GPIO_PULLUP_ONLY);
@@ -66,13 +56,13 @@ void ETHSPIClass::begin(int8_t pin_sclk, int8_t pin_mosi, int8_t pin_miso, int8_
         .duty_cycle_pos = 0,
         .cs_ena_pretrans = 0, // only 0 supported
         .cs_ena_posttrans = 0, // only 0 supported
-        .clock_speed_hz = 20000000, // TODO: check stability
+        .clock_speed_hz = 20000000, // stable with on OpenDTU Fusion Shield
         .input_delay_ns = 0,
         .spics_io_num = pin_cs,
         .flags = 0,
         .queue_size = 20,
-        .pre_cb = NULL,
-        .post_cb = NULL
+        .pre_cb = nullptr,
+        .post_cb = nullptr
     };
 
     spi_device_handle_t spi;
@@ -104,7 +94,7 @@ void ETHSPIClass::begin(int8_t pin_sclk, int8_t pin_mosi, int8_t pin_miso, int8_
 
     // Configure MAC address
     uint8_t mac_addr[6];
-    esp_base_mac_addr_get(mac_addr);
+    ESP_ERROR_CHECK(esp_efuse_mac_get_default(mac_addr));
     mac_addr[5] |= 0x03; // derive ethernet MAC address from base MAC address
     ESP_ERROR_CHECK(esp_eth_ioctl(eth_handle, ETH_CMD_S_MAC_ADDR, mac_addr));
 
@@ -123,8 +113,8 @@ String ETHSPIClass::macAddress()
 {
     uint8_t mac_addr[6] = {0, 0, 0, 0, 0, 0};
     esp_eth_ioctl(eth_handle, ETH_CMD_G_MAC_ADDR, mac_addr);
-    char mac_addr_str[18];
-    sprintf(mac_addr_str, "%02X:%02X:%02X:%02X:%02X:%02X", mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
+    char mac_addr_str[24];
+    snprintf(mac_addr_str, sizeof(mac_addr_str), "%02X:%02X:%02X:%02X:%02X:%02X", mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
     return String(mac_addr_str);
 }
 
